@@ -1,0 +1,4 @@
+#!/bin/sh
+setup-gamecontroller-git.sh
+cd ${RUNSWIFT_CHECKOUT_DIR}/softwares/GameControllerGit/bin/
+java -jar TeamCommunicationMonitor.jar "$@"

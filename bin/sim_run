@@ -1,0 +1,92 @@
+#!/bin/bash
+
+# Default values
+TEAM=18
+FIRST_PLAYER_NUM=1
+LAST_PLAYER_NUM=5
+DEFAULT_FILE_PATH="${RUNSWIFT_CHECKOUT_DIR}/image/home/nao/data/sim_positions.txt"
+FILE_PATH=""
+RUNSWIFT_ARGS=""
+BEHAVIOUR="FieldPlayer"
+
+function usage {
+  echo "usage: sim_run [-t TEAM_NUMBER] [-n NUMBER_OF_ROBOTS] [-f INIT_POSE_FILE] [-b BEHAVIOUR] [-ra RUNSWIFT_ARGS]"
+  echo "  -t --team             Team number (Default = 18)"
+  echo "  -n --number-of-robots Number of robots to start (Default = 5)"
+  echo "  -f --pose-file        Path of file to get initial positions from"
+  echo "                        (File is list of space delimited x, y and"
+  echo "                        theta positions. File should also end"
+  echo "                        with a new line. Sample file can be found"
+  echo "                        at $DEFAULT_FILE_PATH)"
+  echo "  -s --behaviour.skill  Behaviour for all robots on the team to use"
+  echo "  -ra --runswift-args   Any other arbitrary args you want to"
+  echo "                        pass to runswift"
+  exit 1
+}
+
+# TODO: Enable/disable output? + endable/disable background running
+while [[ $# -gt 0 ]]
+do
+    key="$1"
+    case $key in
+        -t|--team)
+        TEAM="$2"
+        shift;shift;;
+        -n|--number-of-robots)
+        LAST_PLAYER_NUM="$2"
+        shift;shift;;
+        -f|--pose-file)
+        FILE_PATH="$2"
+        shift;shift;;
+        -s|--behaviour.skill)
+        BEHAVIOUR="$2"
+        shift;shift;;
+        -ra|--runswift-args)
+        RUNSWIFT_ARGS="$2"
+        shift;shift;;
+        -h|--help)
+        usage;;
+        *) # unknown option
+        echo "Unknown argument. Please use -h or --help for instructions."
+        exit 1;;
+    esac
+done
+
+# Read initial positions from file if it is provided
+if [ ! -z "$FILE_PATH" ]
+then
+    index=0
+    while IFS= read -r line; do
+        ROBOT_POSITIONS[$index]=$(sed 's/^\s*|\s*$//g' <<< $line)
+        index=$(($index+1))
+    done < "$FILE_PATH"
+fi
+
+echo "Starting players $FIRST_PLAYER_NUM-$LAST_PLAYER_NUM robots on team $TEAM..."
+
+for i in $(seq $FIRST_PLAYER_NUM $LAST_PLAYER_NUM);
+do
+    echo $i
+    if [ ! -z "$FILE_PATH" ]
+    then
+        IFS=' ' read -ra ROBOT_POS <<< "${ROBOT_POSITIONS[$i-1]}"
+        # In case we have fewer positions than robots
+        if [ -z $ROBOT_POS ]
+        then
+            simswift -T $TEAM -n $i --behaviour.skill ${BEHAVIOUR} ${RUNSWIFT_ARGS} &
+        else
+            simswift -T $TEAM -n $i --stateestimation.initial_pose_type SPECIFIED \
+                                    --stateestimation.specified_initial_x ${ROBOT_POS[0]} \
+                                    --stateestimation.specified_initial_y ${ROBOT_POS[1]} \
+                                    --stateestimation.specified_initial_theta ${ROBOT_POS[2]} \
+                                    --behaviour.skill ${BEHAVIOUR} \
+                                    ${RUNSWIFT_ARGS} & 
+                                    
+        fi
+    else
+        simswift -T $TEAM -n $i --behaviour.skill ${BEHAVIOUR} ${RUNSWIFT_ARGS} &
+    fi
+    # Sleep for a bit, otherwise robots get launched in the same position,
+    # overlapping with each other and causing weird physics to happen in the simulator
+    sleep 1
+done

@@ -1,0 +1,8 @@
+#!/bin/sh
+cd /home/nk-runswift/GameController-RoboCup2022/GameController/
+# Don't use the fullscreen flag. It might be difficult to access the close button on the top right.
+# If you do use it and get stuck:
+# - 1) Ctrl+Alt+T to open a new terminal.
+# - 2) run xkill
+# - 3) Click anywhere on the Game Controller Dashboard window to close it.
+java -jar GameController.jar

@@ -1,0 +1,46 @@
+#!%(script)s
+# Copyright 1999-2014 Gentoo Foundation
+# Distributed under the terms of the GNU General Public License v2
+# $Header: $
+
+depend() {
+  need dbus
+}
+
+start() {
+  echo "Killing any lingering wpa_supplicant"
+  killall -q wpa_supplicant
+  ifconfig wlan0 up > /dev/null
+  echo "Calling wpa_supplicant on wlan0"
+  wpa_supplicant -iwlan0 -Dnl80211 -c%(wpa_supplicant_filename)s -B
+  sleep 1
+
+  echo "Setting up static IP"
+  ifconfig wlan0 "%(playerIP)s" netmask %(netmask)s > /dev/null
+  if [ -x /sbin/route ]; then
+    # opennao 2.1
+    route add -net default gw "%(gateway)s" # IP Address of our router.
+  else
+    # nao os 2.8
+    ip route add default via "%(gateway)s" # IP Address of our router.
+  fi
+
+  # echo "Setting up wlan0 as dhcp"
+  # dhclient wlan0
+
+  echo "Finished starting runswiftwireless"
+}
+
+stop() {
+  echo "Killing wpa_supplicant"
+  killall -q wpa_supplicant
+  echo "Taking wlan0 down"
+  ifconfig wlan0 down > /dev/null
+}
+
+restart() {
+  stop
+  sleep 2
+  start
+}
+%(run)s

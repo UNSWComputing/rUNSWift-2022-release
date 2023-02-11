@@ -1,0 +1,6 @@
+#!/bin/bash
+echo "!!!"
+# Note: Terminal colors do not seem to work here
+echo " WARNING: grunswift  is deprecated, please use  runswift_gdb "
+echo "!!!"
+runswift_gdb "$@"

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link rel="stylesheet" href="{{url_for('static', filename='css/index.css') }}">
+</head>
+<script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+<script type=text/javascript src="{{url_for('static', filename='js/index.js') }}"></script>
+
+<body onload="init()">
+    <table border="0px">
+        <td>
+            Your team number
+            <select onchange="updateTeam(this.value)">
+                {% for number, name in teams %}
+                    <option value="{{number}}" {{ 'selected' if number == "18" }} >{{name}} ({{number}})</option>
+                {% endfor %}
+            </select>
+            <br />
+            Number of robots on your team
+            <select onchange="updateNumRobots(this.value)">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+            </select>
+            <br />            
+            The opponent's team number
+            <select onchange="updateOpponentTeam(this.value)">
+                {% for number, name in teams %}
+                    <option value="number">{{name}} ({{number}})</option>
+                {% endfor %}
+            </select>
+            <br />
+            Number of robots on the opponent's team
+            <select onchange="updateOpponentNumRobots(this.value)">
+                <option value="0">0</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+            </select>
+        </td>
+        <td>
+            Stop simulator for:
+            <br>
+            <input type="checkbox" name="field_bounds" onchange="updateRule(this.name, this.checked)">
+            Leaving the field
+            <br>
+            <input type="checkbox" name="illegal_positioning" onchange="updateRule(this.name, this.checked)">
+            Illegal positioning
+            <br>
+            <input type="checkbox" name="goal_score" onchange="updateRule(this.name, this.checked)">
+            Goal scored
+            <br>
+        </td>
+        <td>
+            Stop simulator after <select name="time_limit" onchange="updateRule(this.name, this.value)">
+                <option value="-1">unlimited</option>
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="20">20</option>
+            </select> minutes.
+            <br>
+            Show logs every <select onchange="updateLogInterval(this.value)">
+                <option value="0.5">0.5</option>
+                <option value="1.0">1</option>
+                <option value="2.0">2</option>
+            </select> minutes.
+            <br>
+            <input type="checkbox" checked onchange="updateUseGameController(this.checked)">
+            Start gamecontroller
+            <br>
+        </td>
+        <td>
+            Behaviour: <input name="behaviour" list="roles" value="Game" onchange="updateBehaviour(this.value)">
+            <br>
+            Opponent behaviour: <input name="opponent_behaviour" list="roles" value="Game" onchange="updateOpponentBehaviour(this.value)">
+            <br>
+            <datalist id="roles">
+                <option value="Game">
+                <option value="AutonomousCalibration">
+                <option value="FieldPlayer">
+                <option value="Goalie">
+                <option value="ObstacleAvoidance">
+                <option value="OneVsOne">
+                <option value="Openday">
+                <option value="P2PPassing2021">
+                <option value="PassingChallenge">
+                <option value="PenaltyGoalie">
+                <option value="PenaltyStriker">
+            </datalist>
+            <input type="checkbox" onchange="updateExtraBalls(this.checked)">
+            Spawn balls for 1v1
+        </td>
+    </table>
+    <br />
+    <br />
+    <div id="pose_picker" name="pose_picker">
+        <div name="pitch" id="pitch">
+        </div>
+        <br />
+    </div>
+    <br />
+    <button name="start" id="start" onclick="onStartClick()">Start single simulation</button>
+    <div name="start_status" id="start_status"></div>
+    <br />
+    <button name="stop" id="stop" onclick="onStopClick()">Stop single simulation</button>
+    <div name="stop_status" id="stop_status"></div>
+    <br />
+    <!--
+    Doesn't work and there is no current usecase
+
+    <br />
+    How many simulations would you like to run?
+    <input type="number" name="num_simulations" id="num_simulations">
+    <br />
+    Standard deviation for normal distribution?
+    <input type="number" name="sd" id="sd">
+    <button name="start_mul" id="start_mul" onclick="onStartMulClick()">Start multiple simulations</button>
+    <div name="start_mul_status" id="start_mul_status"></div>
+    <br />
+    <br />
+    <br />
+    -->
+    <div id="log" hidden="true">
+        <button name="clear_log" id="clear_log" onclick="resetLog()">Clear log</button>
+        <button name="save_log" id="save_log" onclick="saveLog()">Save log to file</button>
+        <table style="width:100%" id="log_table">
+            <thead id="log_table_header">
+                <tr>
+                    <th colspan="1">Time</th>
+                    <th colspan="10" id="log_table_players_title">Players</th>
+                    <th colspan="2">Ball</th>
+                </tr>
+                <tr id="log_table_players_row">
+                </tr>
+                <tr id="log_table_true_perceived">
+                </tr>
+            </thead>
+            <tbody id="log_table_body"></tbody>
+        </table>
+    </div>
+</body>
+
+</html>

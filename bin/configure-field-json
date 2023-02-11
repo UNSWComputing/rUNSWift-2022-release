@@ -1,0 +1,56 @@
+#!/bin/bash
+
+if [ $# -ne 1 ] || [ $1 = '-h' ]; then
+	echo "Usage: $0 jsonfile"
+	exit 1
+fi
+
+if grep "^#define USE_JSON" ${RUNSWIFT_CHECKOUT_DIR}/robot/utils/SPLDefs.hpp > /dev/null; then
+	echo "Found #define USE_JSON in SPLDefs.hpp"
+else
+	echo "'#define USE' must be in SPLDefs.hpp"
+	exit 1
+fi
+
+file=${RUNSWIFT_CHECKOUT_DIR}/robot/utils/FieldDimensionsJSON.hpp
+
+if ls "$1" > /dev/null 2>&1; then
+	true
+else
+	echo "Could not find $1"
+	exit 1
+fi
+
+INFO=$(cat $1 | grep -Ev '({|})' | tr -d '\t ",' | tr [a-z] [A-Z] | sed -E "s/^([A-Z]*):(.*)/#define FIELDJSON_\1 (int) (\2 * 1000)/")
+echo "Please read the following definitions."
+echo "==============================================================="
+echo "$INFO"
+echo "==============================================================="
+echo "Are they OK? [Y/n]"
+
+read yesno
+if [[ "$yesno" = [nN] ]]; then
+	echo "Please fix the json file and try again"
+	exit 1	
+fi
+
+echo "Writing to $file"
+
+echo "#pragma once" > $file
+cat $1 | grep -Ev '({|})' | tr -d '\t ",' | tr [a-z] [A-Z] | sed -E "s/^([A-Z]*):(.*)/#define FIELDJSON_\1 (int) (\2 * 1000)/" >> $file
+
+
+echo "Don't forget to #define USE_JSON in SPLDefs.hpp"
+echo "Would you like to run build-relwithdebinfo-2.8.sh [Y/n]"
+read yesno
+if [[ "$yesno" != [nN] ]]; then
+	build-relwithdebinfo-2.8.sh || exit 1
+	echo ;
+fi
+
+echo "Would you like to run build-relwithdebinfo-2.1.sh [Y/n]"
+read yesno
+if [[ "$yesno" != [nN] ]]; then
+	build-relwithdebinfo-2.1.sh || exit 1
+	echo ;
+fi

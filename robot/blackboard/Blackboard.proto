@@ -1,0 +1,653 @@
+// It is not recommended to use required.  Use optional to make recordings future-proof.
+
+// The data type of each field can be checked in Blackboard.hpp, composite data type can be found in types/*.hpp
+
+// enum values in c++ and enum values here should match, changing this may
+// corrupt old recordings, so choose your values to be as futureproof as possible
+// uint8_t values in c++ should be int32 values here
+// uint16_t values in c++ should be int32 values here
+// int values in c++ should be int32 if they are normally positive
+// int values in c++ should be sint32 if they are equally likely to be positive vs negative
+// repeated primitive fields need the size to be known!  https://groups.google.com/forum/#!topic/protobuf/p8FACMi1KMA
+
+// to add a field, just add it with a unique number
+// to remove a field:
+//   add a comment in the .proto // removed
+//   if you remove it from Blackboard.hpp, just remove the serialisation and deserialisation in serialise.cpp
+// to rename a field, just rename it.  don't change the number
+// to change a field type, make a new field with a new number
+
+syntax = "proto2";
+
+package offnao;
+
+//first the common shared types
+message PairIntInt {
+  optional sint32 first = 1;
+  optional sint32 second = 2;
+}
+
+message XYZ_Coord {
+  optional float x = 1;
+  optional float y = 2;
+  optional float z = 3;
+}
+
+enum ActionType {
+  NONE = 0;
+  STAND = 1;
+  WALK = 2;
+  DRIBBLE = 3;
+  TURN_DRIBBLE = 4;
+  GETUP_FRONT = 5;
+  GETUP_BACK = 6;
+  TIP_OVER = 7;
+  KICK = 8;
+  INITIAL = 9;
+  LIMP = 10;
+  REF_PICKUP = 11;
+  GOALIE_SIT = 12;
+  GOALIE_DIVE_RIGHT = 13;
+  GOALIE_DIVE_LEFT = 14;
+  GOALIE_CENTRE = 15;
+  GOALIE_UNCENTRE = 16;
+  GOALIE_INITIAL = 17;
+  GOALIE_AFTERSIT_INITIAL = 18;
+  DEFENDER_CENTRE = 19;
+  GOALIE_FAST_SIT = 20;
+  MOTION_CALIBRATE = 21;
+  STAND_STRAIGHT = 22;
+  LINE_UP = 23;
+  NUM_ACTION_TYPES = 24;
+  TEST_ARMS = 25;
+  UKEMI_FRONT = 26;
+  UKEMI_BACK = 27;
+}
+
+message ActionCommandAll {
+  message Head {
+    optional float yaw = 1;
+    optional float pitch = 2;
+    optional bool isRelative = 3;
+    optional float yawSpeed = 4;
+    optional float pitchSpeed = 5;
+  }
+
+  message Body {
+    optional ActionType actionType = 1 [default = NONE];
+    optional sint32 forward = 2;
+    optional sint32 left = 3;
+    optional float turn = 4;
+    optional float power = 5;
+    optional float bend = 6;
+    optional float speed = 7;
+    optional float kickDirection = 8;
+    enum Foot {
+      LEFT = 0;
+      RIGHT = 1;
+    }
+
+    optional Foot foot = 9;
+    optional bool isFast = 10;
+    optional bool misalignedKick = 11;
+    optional bool useShuffle = 12;
+    optional bool leftArmBehind = 13;
+    optional bool rightArmBehind = 14;
+    optional bool blocking = 15;
+  }
+
+  message LED {
+    message rgb {
+      optional bool red = 1;
+      optional bool green = 2;
+      optional bool blue = 3;
+    }
+
+    optional uint32 leftEar = 1;
+    optional uint32 rightEar = 2;
+    optional rgb leftEye = 3;
+    optional rgb rightEye = 4;
+    optional rgb chestButton = 5;
+    optional rgb leftFoot = 6;
+    optional rgb rightFoot = 7;
+  }
+
+  optional Head head = 1;
+  optional Body body = 2;
+  optional LED leds = 3;
+  // optional float sonar = 4;
+  enum Stiffen {
+    NONE = 0;
+    STIFFEN = 1;
+  }
+
+  optional Stiffen stiffen = 5;
+}
+
+enum RobotVisionInfoType {
+  rUnknown = 0;
+  rBlue = 1;
+  rRed = 2;
+}
+
+// used for vector<vector<int> >
+message RepeatedInt {
+  // TODO: add the sizes to the message
+  repeated int32 values = 1;
+}
+
+message FloatMatrix {
+  optional uint32 size1 = 1;
+  optional uint32 size2 = 2;
+  repeated float data = 3;
+}
+
+message AbsCoord {
+  repeated float vec = 1;
+  optional FloatMatrix var = 2;
+  optional float weight = 3;
+}
+
+message SharedStateEstimationBundle {
+  optional AbsCoord robotPos = 1;
+  optional AbsCoord ballPosRRC = 2;
+  optional AbsCoord ballVelRRC = 3;
+  optional bool haveBallUpdate = 4;
+}
+
+message JointValues {
+  repeated float angles = 1;
+  repeated float stiffnesses = 2;
+  repeated float temperatures = 3;
+  repeated float currents = 4;
+}
+
+message SensorValues {
+  optional JointValues joints = 1;
+  repeated float sensors = 2;
+  // repeated float sonar = 3;
+}
+
+//then the messages for each sub-blackboard
+message GameController {
+  message TeamInfo {
+    optional int32 teamNumber = 1;
+  }
+
+  optional bool team_red = 1; // removed
+  optional int32 player_number = 2;
+  optional TeamInfo our_team = 3;
+}
+
+message Motion {
+  message Pose {
+    optional FloatMatrix topCameraToWorldTransform = 1;
+    optional FloatMatrix botCameraToWorldTransform = 2;
+    optional FloatMatrix origin = 3;
+    optional FloatMatrix zunit = 4;
+    optional FloatMatrix topCOrigin = 5;
+    optional FloatMatrix botCOrigin = 6;
+    optional PairIntInt horizon = 7;
+    repeated sint32 topExclusionArray = 8;
+    repeated sint32 botExclusionArray = 9;
+    optional FloatMatrix neckToWorldTransform = 10;
+  }
+
+  message Odometry {
+    optional float forward = 1;
+    optional float left = 2;
+    optional float turn = 3;
+  }
+
+  message MotionDebugInfo {
+    optional FeetPosition feetPosition = 1;
+  }
+
+  message FeetPosition {
+    optional FootPosition left = 1;
+    optional FootPosition right = 2;
+  }
+
+  message FootPosition {
+    optional float x = 1;
+    optional float y = 2;
+    optional float theta = 3;
+  }
+
+  optional SensorValues sensors = 1;
+  optional Pose pose = 2;
+  optional XYZ_Coord com = 3;
+  optional Odometry odometry = 4;
+  optional ActionCommandAll active = 5;
+  optional JointValues jointRequest = 6;
+  optional MotionDebugInfo motionDebugInfo = 7;
+}
+
+message Perception {
+  optional uint32 behaviour = 1;
+  optional uint32 kinematics = 2;
+  optional uint32 stateEstimation = 3;
+  optional uint32 total = 4;
+  optional uint32 vision = 5;
+}
+
+message Kinematics {
+  message Parameters {
+    optional float cameraPitchTop = 1;
+    optional float cameraYawTop = 2;
+    optional float cameraRollTop = 3;
+    optional float cameraYawBottom = 4;
+    optional float cameraPitchBottom = 5;
+    optional float cameraRollBottom = 6;
+    optional float bodyPitch = 7;
+  }
+
+  // repeated RepeatedInt sonarFiltered = 1;
+  optional Parameters parameters = 2;
+  // optional SensorValues sensorsLagged = 3;
+}
+
+// looks like a composite type
+message Behaviour {
+  message BehaviourRequest {
+    // optional WhichCamera whichCamera = 1;
+    optional ActionCommandAll actions = 2;
+    // optional bool goalieAttacking = 3;
+    // optional bool goalieDiving = 4;
+    // optional int32 secondsSinceLastKick = 5;
+    // optional bool doingBallLineUp = 6;
+    // optional bool isInReadyMode = 7;
+    // optional float timeToReachBall = 8;
+    // optional float timeToReachDefender = 9;
+    // optional float timeToReachMidfielder = 10;
+    // optional float timeToReachUpfielder = 11;
+    // optional int32 kickoffSide = 12;
+    // optional bool wantCrazyBall = 13;
+    // optional string behaviourHierarchy = 14;
+    // optional int32 currentRole = 15;
+    // optional int32 role = 16;
+    // optional bool playingBall = 17;
+    // optional bool needAssistance = 18;
+    // optional bool isAssisting = 19;
+    // optional bool isKickedOff = 20;
+    // optional bool isFollowing = 21;
+    // optional int32 ballLostFrames = 22;
+    // optional sint32 readyPositionAllocation0 = 23;
+    // optional sint32 readyPositionAllocation1 = 24;
+    // optional sint32 readyPositionAllocation2 = 25;
+    // optional sint32 readyPositionAllocation3 = 26;
+    // optional sint32 readyPositionAllocation4 = 27;
+    optional BehaviourDebugInfo behaviourDebugInfo = 28;
+    optional BehaviourSharedData behaviourSharedData = 29;
+  }
+
+  repeated BehaviourRequest request = 1;
+}
+
+message Point {
+  optional sint32 x = 1;
+  optional sint32 y = 2;
+}
+
+message BBox {
+  optional Point a = 1;
+  optional Point b = 2;
+}
+
+message RRCoord {
+  repeated float vec = 1;
+  optional FloatMatrix var = 2;
+}
+
+message BehaviourSharedData {
+  // optional bool goalieAttacking = 1;
+  // optional bool goalieDiving = 2;
+  // optional float timeToReachBall = 3;
+  // optional float timeToReachUpfielder = 4;
+  // optional float timeToReachMidfielder = 5;
+  // optional float timeToReachDefender = 6;
+  // optional int32 currentRole = 7;
+  optional int32 role = 8;
+  optional bool playingBall = 9;
+  optional bool needAssistance = 10;
+  optional bool isAssisting = 11;
+  optional int32 secondsSinceLastKick = 12;
+  // optional bool isFollowing = 13;
+  optional bool isKickedOff = 14;
+  // optional bool doingBallLineUp = 15;
+  // optional bool isInReadyMode = 16;
+  // optional ReadySkillPositionAllocation readyPositionAllocation = 17;
+  // optional int32 ballLostFrames = 18;
+  optional float walkingToX = 19;
+  optional float walkingToY = 20;
+  optional float walkingToH = 21;
+}
+
+message Vision {
+
+  message BallInfo {
+    optional RRCoord rr = 1;
+    optional int32 radius = 2;
+    optional Point imageCoords = 3;
+    optional XYZ_Coord neckRelative = 4;
+    optional bool topCamera = 5;
+    // optional float visionVar = 6;
+    // optional int32 darkestPoint = 7;
+    // optional float angleVar = 8;
+    // optional int32 ccdRating = 9;
+    // optional int32 lastSeen = 10;
+    // optional int32 lifetime = 11;
+  }
+
+  enum PostInfoType {
+    pNone = 0;
+    pLeft = 1;
+    pRight = 2;
+    pHome = 4;
+    pAway = 8;
+
+    pHomeLeft = 5;
+    pHomeRight = 6;
+    pAwayLeft = 9;
+    pAwayRight = 10;
+  }
+
+  enum PostInfoDirection {
+    pToLeftOf = 0;
+    pToRightOf = 1;
+    pUnknown = 2;
+  }
+
+  message PostInfo {
+    optional RRCoord rr = 1;
+    optional PostInfoType type = 2;
+    optional BBox imageCoords = 3;
+    optional float wDistance = 4;
+    optional float kDistance = 5;
+    optional bool trustDistance = 6;
+    optional PostInfoDirection dir = 7;
+  }
+
+  enum Cameras {
+    TOP_CAMERA = 0;
+    BOT_CAMERA = 1;
+    BOTH_CAMERAS = 2;
+    OLD_DETECTION = 3;
+  }
+
+  message RobotVisionInfo {
+    optional RRCoord rr = 1;
+    optional RobotVisionInfoType type = 2 [default = rUnknown];
+    optional Cameras cameras = 3 [default = BOTH_CAMERAS];
+    optional BBox imageCoords = 4;
+    optional BBox topImageCoords = 5;
+    optional BBox botImageCoords = 6;
+  }
+
+  message RANSACLine {
+    optional sint64 t1 = 1;
+    optional sint64 t2 = 2;
+    optional sint64 t3 = 3;
+    optional float var = 4;
+    optional Point p1 = 5;
+    optional Point p2 = 6;
+  }
+
+  message FieldBoundaryInfo {
+    optional RANSACLine rrBoundary = 1;
+    optional RANSACLine imageBoundary = 2;
+  }
+
+  enum FieldFeatureInfoType {
+    fNone = 0;
+    fLine = 1;
+    fCorner = 2;
+    fTJunction = 3;
+    fPenaltySpot = 4;
+    fCentreCircle = 5;
+    fFieldLinePoint = 6;
+    fXJunction = 7;
+    fParallelLines = 8;
+    fGoalBoxCorner = 9;
+  }
+
+  message FieldFeatureInfo {
+    message FieldLinePointInfo {
+      optional Point p = 1;
+      optional Point rrp = 2;
+    }
+
+    message LineInfo {
+      optional Point p1 = 1;
+      optional Point p2 = 2;
+      optional sint32 t1 = 3;
+      optional sint32 t2 = 4;
+      optional sint32 t3 = 5;
+      optional RRCoord rr = 6;
+    }
+
+    message CornerInfo {
+      optional Point p = 1;
+      optional Point e1 = 2;
+      optional Point e2 = 3;
+    }
+
+    message TJunctionInfo {
+      optional Point p = 1;
+    }
+
+    message GoalBoxCornerInfo {
+      optional Point p = 1;
+      optional bool left_corner = 2;
+    }
+
+    message PenaltySpotInfo {
+      optional Point p = 1;
+      optional sint32 w = 2;
+      optional sint32 h = 3;
+    }
+
+    message XJunctionInfo {
+      optional Point p = 1;
+    }
+
+    message CentreCircleInfo {
+    }
+
+    message ParallelLinesInfo {
+      optional LineInfo l1 = 1;
+      optional LineInfo l2 = 2;
+    }
+
+    optional RRCoord rr = 1;
+    optional FieldFeatureInfoType type = 2;
+    // optional LineInfo tmpLine = 3;
+    // optional bool tmpLineUsed = 4;
+    // optional CornerInfo tmpCorner = 5;
+    // optional TJunctionInfo tmpTJunction = 6;
+    // optional PenaltySpotInfo tmpPenaltyspot = 7;
+    // optional CentreCircleInfo tmpCentrecircle = 8;
+    // optional FieldLinePointInfo tmpFieldlinepoints = 9;
+    // optional XJunctionInfo tmpxjunction = 10;
+    // optional ParallelLinesInfo tmpparallellines = 11;
+    // optional GoalBoxCornerInfo tmpgoal_box_corner = 12;
+    optional Point p1 = 13;
+    optional Point p2 = 14;
+  }
+
+  message RegionI {
+    optional bool is_top_camera_ = 1;
+    optional BBox bounding_box_rel_ = 2;
+    optional BBox bounding_box_fovea_ = 3;
+    optional BBox bounding_box_raw_ = 4;
+    optional int32 n_raw_cols_in_region_ = 5;
+    optional int32 n_raw_rows_in_region_ = 6;
+    optional int32 density_to_raw_ = 7;
+    optional int32 y_offset_raw_ = 8;
+    optional int32 x_offset_raw_ = 9;
+    optional int32 raw_total_width_ = 10;
+    optional int32 raw_to_fovea_density_ = 11;
+    optional int32 fovea_width_ = 12;
+  }
+
+  message CameraSettings {
+    optional uint32 hflip = 1;
+    optional uint32 vflip = 2;
+    optional uint32 brightness = 3;
+    optional uint32 contrast = 4;
+    optional uint32 saturation = 5;
+    optional uint32 hue = 6;
+    optional uint32 sharpness = 7;
+    optional uint32 backlightCompensation = 8;
+    optional uint32 exposure = 9;
+    optional uint32 gain = 10;
+    optional uint32 whiteBalance = 11;
+    optional uint32 exposureAuto = 12;
+    optional uint32 autoWhiteBalance = 13;
+    optional uint32 autoFocus = 14;
+    optional uint32 exposureAlgorithm = 15;
+    optional uint32 aeTargetAvgLuma = 16;
+    optional uint32 aeTargetAvgLumaDark = 17;
+    optional uint32 aeTargetGain = 18;
+    optional uint32 aeMinVirtGain = 19;
+    optional uint32 aeMaxVirtGain = 20;
+    optional uint32 aeMinVirtAGain = 21;
+    optional uint32 aeMaxVirtAGain = 22;
+    optional uint32 aeTargetExposure = 23;
+    optional bool aeUseWeightTable = 24;
+  }
+
+  enum Colour {
+    cGREEN = 0;
+    cWHITE = 1;
+    cBLACK = 2;
+    cBACKGROUND = 3;
+    cBODY_PART = 4;
+    cNUM_COLOURS = 5;
+  }
+
+  // repeated Ipoint landmarks = 1;
+  optional int64 timestamp = 2;
+  // optional PostInfoType goalArea = 3; // Not sure what type it is
+  // optional float awayGoalProb = 4;
+  // optional int32 homeMapSize = 5;
+  // optional int32 awayMapSize = 6;
+  // repeated FootInfo feet_boxes = 7;
+  repeated BallInfo balls = 8;
+  // optional BallHint ballhint = 9;
+  // repeated PostInfo posts = 10;
+  repeated RobotVisionInfo robots = 11;
+  repeated FieldBoundaryInfo fieldBoundaries = 12;
+  repeated FieldFeatureInfo fieldFeatures = 13;
+  // optional uint32 missedFrames = 14;
+  // optional PairIntInt dxdy = 15;
+  repeated RegionI regions = 16;
+  optional CameraSettings topCameraSettings = 17;
+  optional CameraSettings botCameraSettings = 18;
+  // optional LastSecondInfo lastSecond = 19;
+
+  optional bytes topSaliency = 20;
+  optional bytes botSaliency = 21;
+  optional bytes topFrame = 22;
+  optional bytes botFrame = 23;
+
+  optional float horizontalFieldOfView = 24;
+  optional float verticalFieldOfView = 25;
+
+  optional bytes topFrameJPEG = 26;
+  optional bytes botFrameJPEG = 27;
+
+  optional uint32 ATWindowSizeTop = 28;
+  optional uint32 ATWindowSizeBot = 29;
+  optional int32 ATPercentageTop = 30;
+  optional int32 ATPercentageBot = 31;
+}
+
+message Receiver {
+  message SPLStandardMessage {
+    optional string header = 1;
+    optional uint32 version = 2;
+    optional uint32 playerNum = 3;
+    optional uint32 teamNum = 4;
+    optional uint32 fallen = 5;
+    repeated float pose = 6;
+    optional float ballAge = 7;
+    repeated float ball = 8;
+    optional uint32 numOfDataBytes = 9;
+    optional bytes data = 10;
+  }
+
+  message BroadcastData {
+    optional int32 playerNum = 1;
+    repeated float robotPos = 2;
+    optional AbsCoord ballPosAbs = 3;
+    optional RRCoord ballPosRR = 4;
+    optional SharedStateEstimationBundle sharedStateEstimationBundle = 5;
+    optional BehaviourSharedData behaviourSharedData = 6;
+    optional ActionType acB = 7;
+    optional float uptime = 8;
+    optional uint32 gameState = 9;
+  }
+
+  repeated SPLStandardMessage message = 1;
+  repeated BroadcastData data = 2;
+  repeated int32 lastReceived = 3;
+  // TODO: add the sizes to the message
+  repeated bool incapacitated = 4;
+}
+
+message StateEstimation {
+  message RobotObstacle {
+    optional RRCoord rr = 1;
+    optional RobotVisionInfoType type = 2;
+    optional AbsCoord rrc = 3;
+    optional AbsCoord pos = 4;
+    optional double tangentHeadingLeft = 5;
+    optional double tangentHeadingRight = 6;
+    optional RRCoord evadeVectorLeft = 7;
+    optional RRCoord evadeVectorRight = 8;
+  }
+
+  repeated RobotObstacle robotObstacles = 1;
+  optional AbsCoord robotPos = 2;
+  repeated AbsCoord allRobotPos = 3;
+  optional RRCoord ballPosRR = 4;
+  optional AbsCoord ballPosRRC = 5;
+  optional AbsCoord ballVelRRC = 6;
+  optional AbsCoord ballVel = 7;
+  optional AbsCoord ballPos = 8;
+  optional AbsCoord teamBallPos = 9;
+  optional AbsCoord teamBallVel = 10;
+  optional SharedStateEstimationBundle sharedStateEstimationBundle = 11;
+  optional bool havePendingOutgoingSharedBundle = 12;
+  // TODO: add the sizes to the message
+  repeated bool havePendingIncomingSharedBundle = 13;
+}
+
+message BehaviourDebugInfo {
+  optional string bodyBehaviourHierarchy = 1;
+  optional string headBehaviourHierarchy = 2;
+  optional bool haveBallManoeuvreTarget = 3;
+  optional float ballManoeuvreTargetX = 4;
+  optional float ballManoeuvreTargetY = 5;
+  optional float ballManoeuvreHeadingError = 6;
+  optional string ballManoeuvreType = 7;
+  optional bool ballManoeuvreHard = 8;
+  optional bool anticipating = 9;
+  optional float anticipateX = 10;
+  optional float anticipateY = 11;
+  optional float anticipateH = 12;
+}
+
+// and finally the top-level blackboard
+message Blackboard {
+  optional uint64 mask = 1;
+  optional GameController gameController = 2;
+  optional Motion motion = 3;
+  optional Behaviour behaviour = 4;
+  optional Perception perception = 5;
+  optional Kinematics kinematics = 6;
+  optional Vision vision = 7;
+  optional Receiver receiver = 8;
+  optional StateEstimation stateEstimation = 9;
+}

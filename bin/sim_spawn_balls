@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# Script to change what balls are spawned by rcssserver
+
+# Takes in arguments to pass onto sim_run
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]
+then
+    echo "usage: sim_spawn_balls X,Y [X,Y] ..."
+    echo "spawns a ball for each X,Y pair"
+    exit 1
+fi
+
+# Spawns them but the naos can't see them?
+# for i in $@
+# do
+#     msg="(scene rsg/agent/ball.rsg $(echo $i | tr ',' ' '))(init)"
+#     echo $msg
+#     length=$(($(wc -c <<< "$msg") - 1))
+#     printf "\x00\x00\x00\x$(printf %2X $length)$msg" | nc localhost 3100 &
+#     sleep 0.05
+# done
+
+FIELD_DEFINITION_PATH="$RUNSWIFT_CHECKOUT_DIR"/softwares/simspark/rcssserver3d/installed/share/rcssserver3d/rsg/agent/nao/soccer.rsg
+# remove the extra balls we added
+sed -E -i '/ \(importScene rsg\/agent\/ball.rsg .*\)/d' "$FIELD_DEFINITION_PATH"
+
+for i in $@
+do
+    COORDS="$(echo $i | tr ',' ' ')"
+    sed -E -i "s|(;; add the ball)|\1\n (importScene rsg/agent/ball.rsg $COORDS)|" "$FIELD_DEFINITION_PATH"
+done

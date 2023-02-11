@@ -1,0 +1,4 @@
+#!/bin/sh
+setup-gamecontroller-2021.sh
+cd ${RUNSWIFT_CHECKOUT_DIR}/softwares/GameController2021
+java -jar TeamCommunicationMonitor.jar "$@"

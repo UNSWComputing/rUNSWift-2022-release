@@ -1,0 +1,13 @@
+class_<BehaviourDebugInfo>("BehaviourDebugInfo")
+   .def_readwrite("bodyBehaviourHierarchy", &BehaviourDebugInfo::bodyBehaviourHierarchy)
+   .def_readwrite("headBehaviourHierarchy", &BehaviourDebugInfo::headBehaviourHierarchy)
+   .def_readwrite("haveBallManoeuvreTarget", &BehaviourDebugInfo::haveBallManoeuvreTarget)
+   .def_readwrite("ballManoeuvreTargetX", &BehaviourDebugInfo::ballManoeuvreTargetX)
+   .def_readwrite("ballManoeuvreTargetY", &BehaviourDebugInfo::ballManoeuvreTargetY)
+   .def_readwrite("ballManoeuvreHeadingError", &BehaviourDebugInfo::ballManoeuvreHeadingError)
+   .def_readwrite("ballManoeuvreType", &BehaviourDebugInfo::ballManoeuvreType)
+   .def_readwrite("ballManoeuvreHard", &BehaviourDebugInfo::ballManoeuvreHard)
+   .def_readwrite("anticipating", &BehaviourDebugInfo::anticipating)
+   .def_readwrite("anticipateX", &BehaviourDebugInfo::anticipateX)
+   .def_readwrite("anticipateY", &BehaviourDebugInfo::anticipateY)
+   .def_readwrite("anticipateH", &BehaviourDebugInfo::anticipateH);

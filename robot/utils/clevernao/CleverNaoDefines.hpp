@@ -1,0 +1,19 @@
+#ifndef CLEVER_NAO_DEFINES
+#define CLEVER_NAO_DEFINES
+
+#define KICK_LEAN_EXPERIMENT_SITUATION_DIMS 1
+#define KICK_LEAN_EXPERIMENT_HEURISTIC_DIMS 1
+#define KICK_LEAN_EXPERIMENT_EXPERIMENT_DIMS KICK_LEAN_EXPERIMENT_SITUATION_DIMS+KICK_LEAN_EXPERIMENT_HEURISTIC_DIMS
+#define KICK_LEAN_EXPERIMENT_DEFAULT_VALUE 0.5
+
+#define SHOW_KICK_LEAN_EXPERIMENT_DEBUG
+
+enum CleverNaoExperimentType
+{
+    EMPTY_EXPERIMENT = 0,
+    KICK_LEAN_LEFT   = 1,   // Determine a left kick lean offset to prevent falls.
+    KICK_LEAN_RIGHT  = 2,   // Determine a right kick lean offset to prevent falls.
+    NUM_EXPERIMENTS
+};
+
+#endif /* end of include guard: CLEVER_NAO_DEFINES */

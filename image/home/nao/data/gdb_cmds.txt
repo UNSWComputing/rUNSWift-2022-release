@@ -1,0 +1,40 @@
+# so we can ctrl-c to stop
+handle SIGINT nostop
+handle SIGINT print
+handle SIGINT pass
+# so we can ctrl-z to pause
+handle SIGTSTP stop
+handle SIGTSTP print
+handle SIGTSTP nopass
+# need this to catch "main thread has frozen"
+handle SIGALRM stop
+handle SIGALRM print
+handle SIGALRM pass
+# need this to ignore some weird thing python is doing when sometimes failing to load shared objects and then reloading
+# https://trello.com/c/0jey6MHV/214-have-runswiftgdb-ignore-sigstop
+handle SIGSTOP nostop
+handle SIGSTOP noprint
+handle SIGSTOP pass
+
+# if this isn't working, there is probably an issue with gdb
+# https://trello.com/c/hqq39KUI/219-tell-gdb-to-ignore-disconnects-and-port-already-open-from-offnaotransmitter
+catch throw if !$_any_caller_is("Connection::sync_send", 5)
+set $exitcode = -999
+# use the ## lines for creating a watchpoint
+## break VisionBlackboard::VisionBlackboard
+run
+# doesn't work without this-> ?
+## watch -location this->topFrame
+# boost python object creates blackboards unnecessarily
+## clear VisionBlackboard::VisionBlackboard
+## continue
+
+# TODO (jayen): sometimes the exit code isn't set, particularly if it already entered interactive gdb before, so try the Python API.
+# https://sourceware.org/gdb/current/onlinedocs/gdb/Python-Commands.html#Python-Commands
+# https://stackoverflow.com/a/8694502/192798
+# nao os 2.1 has gdb 7.3.1, but while you can download old gdb's, i can't find the docs online.  python-interactive doesn't work at least, but python does
+if $exitcode != -999
+quit
+else
+bt full
+end

@@ -1,0 +1,29 @@
+// see Blackboard.proto for instructions
+
+// this should be in utils/offnao but I had trouble getting it to compile, so I'm keeping it next to Blackboard.proto
+
+syntax = "proto2";
+
+import "Blackboard.proto";
+
+package offnao;
+
+message ExternalData {
+}
+message MapFieldEntry {
+  optional string key = 1;
+  optional ExternalData value = 2;
+}
+
+message Frame {
+  optional Blackboard blackboard = 1;
+  optional int32 timestamp = 2;
+  repeated MapFieldEntry externalData = 3;
+}
+
+message NaoData {
+  repeated Frame frames = 1;
+  optional int32 currentFrame = 2;
+  optional int32 timeRecorded = 3;
+  optional bool isPaused = 4;
+}

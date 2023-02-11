@@ -1,0 +1,5 @@
+#!/bin/bash
+set -e
+set -u
+
+gdb -ex "file $RUNSWIFT_CHECKOUT_DIR/build-relwithdebinfo/robot/runswift" -ex "target remote :2345"

@@ -1,0 +1,3 @@
+#!/bin/bash
+
+python3 ${RUNSWIFT_CHECKOUT_DIR}/utils/pose-analyser/pose-analyser.py "$@"

@@ -1,0 +1,13 @@
+[Unit]
+Description=Daemon to keep runswift running
+After=multi-user.target
+# doesn't work in 2.8 but may work in future versions.  looks like the default is 500ms
+StartLimitIntervalSec=100ms
+StartLimitBurst=9999
+
+[Service]
+ExecStart=/home/nao/bin/daemon.py
+Restart=always
+
+[Install]
+WantedBy=default.target

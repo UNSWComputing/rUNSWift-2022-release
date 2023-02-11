@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# Stop processes started by sim_start
+
+if pgrep "rcssserver3d" > /dev/null
+then
+    echo "rcssserver3d is running, stopping..."
+    pkill -9 rcssserver3d
+    echo "Stopped rcssserver3d."
+else
+    echo "rcssserver3d is not running, skipping."
+fi
+
+if pgrep "roboviz" > /dev/null
+then
+    echo "Roboviz is running, stopping..."
+    pkill -f "RoboViz.jar"
+    echo "Stopped Roboviz."
+else
+    echo "Roboviz is not running, skipping."
+fi
+
+echo "Stopping simswift instances..."
+sim_kill
+echo "Stopped simswift instances."
+
+if pgrep "gamecontroller" > /dev/null
+then
+    echo "gamecontroller is running, stopping..."
+    pkill -f "GameController.jar"
+    echo "Stopped gamecontroller."
+else
+    echo "gamecontroller is not running, skipping."
+fi

@@ -1,0 +1,20 @@
+#!/bin/bash
+
+REALPATH=$(realpath "$0")
+BIN_DIR=$(dirname "$REALPATH")
+source "$BIN_DIR/source.sh"
+
+if [[ ! -d "$RUNSWIFT_CHECKOUT_DIR/.virtualenvs/simserver" ]]; then
+  echo "No venv found for simserver, creating now..."
+  aptinstall python3-venv
+  mkdir -p "$RUNSWIFT_CHECKOUT_DIR/.virtualenvs"
+  python3 -m venv "$RUNSWIFT_CHECKOUT_DIR/.virtualenvs/simserver"
+  (
+    source "$RUNSWIFT_CHECKOUT_DIR/.virtualenvs/simserver/bin/activate"
+    pip3 install -r "$RUNSWIFT_CHECKOUT_DIR/utils/simserver/requirements.txt"
+  )
+  echo "venv created."
+fi
+source "$RUNSWIFT_CHECKOUT_DIR/.virtualenvs/simserver/bin/activate"
+cd "$RUNSWIFT_CHECKOUT_DIR/utils/simserver"
+python3 app.py

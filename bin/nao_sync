@@ -1,0 +1,409 @@
+#!/bin/bash
+
+REALPATH=$(realpath "$0")
+BIN_DIR=$(dirname "$REALPATH")
+source "$BIN_DIR/source.sh"
+
+if [[ $1 == "status" ]]
+then
+   for name in "${!robots[@]}"
+   do
+      # separate prints instead of just one so we know which host is taking a while
+      printf "$name\t"
+      if $SSH -o BatchMode=yes -o StrictHostKeyChecking=no nao@$name.local true 2> /dev/null
+      then
+         printf "Connected."
+      else
+         printf "Can't connect!"
+      fi
+      echo
+   done
+
+   exit $LINENO
+fi
+
+FALSE=1
+TRUE=0
+
+usage() {
+   echo -e "nao_sync: Synchronise robot with image directory in repository"
+   echo -e "Usage: $0 status"
+   echo -e "Usage: $0 -s [-h hostname] [-v os_version] robot"
+   echo -e "Usage: $0 [-adgrx] [-b build_directory] [-h hostname] [-v os_version] robot"
+   echo -e
+   echo -e "Options:"
+   echo -e "\tstatus:\tSSH's to known robots to determine connectivity"
+   echo -e "\trobot:\tName of target robot, without .local (eg. demoman)"
+   echo -e "\t-a:\tUpload libagent. Disabled by default"
+   echo -e "\t-b:\tUpload from build_directory"
+   echo -e "\t-d:\tDelete contents of ~nao. Disabled by default"
+   echo -e "\t-g:\tUpload debug symbols. Disabled by default"
+   echo -e "\t-h:\tHostname of robot.  Default is 'robot.local' for known robots"
+   echo -e "\t-r:\tUpload runswift. Disabled by default"
+   echo -e "\t-s:\tSetup robot. Disabled by default"
+   echo -e "\t-v:\tOS version (2.1 or 2.8). Detected from 'robot' by default"
+   echo -e "\t-x:\tDon't sync image directory. Synced by default"
+   exit $LINENO
+}
+
+declare -a warnings=()
+function print_warnings() {
+  # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=529627 affects ubuntu 16.04 but not 18.04
+  if [[ ${#warnings[@]} -gt 0 ]]; then
+    for warning in "${warnings[@]}"
+    do
+       mywarning "$warning"
+    done
+    echo
+  fi
+}
+
+function sync_runswift() {
+   if [ -f "$build/robot/runswift" ]; then
+      echo "Copying and rewriting RPATH"
+      cp -a $build/robot/runswift $build/robot/runswift.nao
+      patchelf --set-rpath /home/nao/lib $build/robot/runswift.nao
+      RSYNC_VERBOSE $build/robot/runswift.nao nao@$hostname:/home/nao/bin/runswift
+      if [ $debug -eq $TRUE ]; then
+         RSYNC_VERBOSE $build/robot/runswift.debug nao@$hostname:/home/nao/bin/
+      fi
+      echo "Killing any stray runswift processes..."
+      $SSH nao@$hostname "killall runswift || true"
+   else
+      myerror "runswift does not exist!"
+   fi
+}
+
+function sync_libagent() {
+   if [[ "$osversion" = "2.1" ]]; then
+       if [ -f "$build/robot/libagent.so" ]; then
+           myecho "Killing any stray runswift processes..."
+           $SSH nao@$hostname "killall runswift || true"
+           $SSH nao@$hostname mkdir -p naoqi/lib/naoqi
+           RSYNC_VERBOSE $build/robot/libagent.so nao@$hostname:/home/nao/naoqi/lib/naoqi/
+           # nao restart holds the terminal if it's not a [pseudo]terminal
+           $SSH -tt nao@$hostname "sudo /etc/init.d/naoqi restart"
+       else
+           myerror "libagent does not exist!"
+       fi
+   else
+       warnings+=("you are trying to sync libagent onto 2.8, where we don't use/compile libagent")
+   fi
+}
+
+function sync_gmm(){
+   RSYNC_CONCISE $RUNSWIFT_CHECKOUT_DIR/ml_models/*.gmm $RUNSWIFT_CHECKOUT_DIR/ml_models/*.pca nao@$hostname:/home/nao/data/
+}
+
+function sync_dnn(){
+   RSYNC_CONCISE $RUNSWIFT_CHECKOUT_DIR/ml_models/dnn_model/ nao@$hostname:/home/nao/data/dnn_model/
+}
+
+function sync_image() {
+   # Clear out the .pyc and .pyo files
+   # only clear out data ones as naoqi has some in .local
+   $SSH nao@$hostname 'shopt -s globstar; rm -rf data/**/*.pyc data/**/*.pyo'
+
+   if [[ "$osversion" = "2.1" ]]; then
+      exclude=--exclude=2.8
+   else
+      exclude=--exclude=2.1
+   fi
+
+   # Sync remaining files from the image/home/nao folder.
+   # This folder contains behaviours, configs and most importantly runswift.
+   RSYNC_CONCISE --chmod go= $del $exclude --exclude=*.pyc $RUNSWIFT_CHECKOUT_DIR/image/home/nao/ nao@$hostname:/home/nao/
+
+   # add setup stuff to /home/nao here as it gets reset with `nao_sync -d`
+   # this adds a small amount of time to each nao_sync
+
+   if [[ "$osversion" = "2.1" ]]; then
+      # Copying protobuf libs
+      RSYNC_CONCISE $RUNSWIFT_CHECKOUT_DIR/softwares/protobuf-2.6.1/lib/ nao@$hostname:/home/nao/lib/
+   else
+      # installed for daemon.py to access lola
+      RSYNC_VERBOSE "$RUNSWIFT_CHECKOUT_DIR/softwares/pip/" nao@$hostname:/home/nao/pip/
+      $SSH nao@$hostname "pip --disable-pip-version-check install --user pip/msgpack-$MSGPACK_VERSION-cp27-cp27m-manylinux1_i686.whl"
+   fi
+
+   # Setting up alsaaudio hard link
+   if [[ "$osversion" = "2.1" ]]; then
+      $SSH nao@$hostname "[[ -f whistle/alsaaudio.so ]] || ln whistle/v5alsaaudio/alsaaudio.so whistle/alsaaudio.so"
+   else
+      $SSH nao@$hostname "[[ -f whistle/alsaaudio.so ]] || ln whistle/v6alsaaudio/alsaaudio.so whistle/alsaaudio.so"
+   fi
+
+   # set the volume
+   # $SSH nao@$hostname "/usr/bin/amixer -qs < /home/nao/data/volumeinfo.dat"
+}
+
+function set_hostname() {
+  $SSH nao@$hostname "sudo tee /etc/hostname > /dev/null" <<< $robot
+  $SSH nao@$hostname "sudo hostname $robot"
+  if [[ "$osversion" = "2.1" ]]; then
+    $SSH nao@$hostname "sudo /etc/init.d/avahi-daemon restart"
+  else
+    $SSH nao@$hostname "sudo systemctl restart avahi-daemon"
+  fi
+  # the hostname has now changed, so use the new one for the rest of this script
+  hostname=$robot
+}
+
+# Find the runswift checkout dir
+if [ ! -d "$RUNSWIFT_CHECKOUT_DIR" -o ! -d "$RUNSWIFT_CHECKOUT_DIR/image" ]; then
+   myerror "Image directory not found! Set your RUNSWIFT_CHECKOUT_DIR"
+   exit $LINENO
+fi
+
+# Process args. If more than one robot is supplied, only the last one is used
+agent=$FALSE
+delete=$FALSE
+debug=$FALSE
+runswift=$FALSE
+setup=$FALSE
+image=$TRUE
+
+build=
+osversion=
+hostname=
+
+robot=""
+
+while getopts ":adgrsxb:h:v:" opt; do
+   case $opt in
+      a)   agent=$TRUE
+            ;;
+      d)   delete=$TRUE
+            ;;
+      g)   debug=$TRUE
+            ;;
+      r)   runswift=$TRUE
+            ;;
+      s)   setup=$TRUE
+            ;;
+      x)   image=$FALSE
+            ;;
+      b)   build="$OPTARG"
+            ;;
+      h)   hostname="$OPTARG"
+            ;;
+      v)   osversion="$OPTARG"
+            ;;
+      \?)   usage
+            ;;
+   esac
+done
+
+if [[ $setup -eq $TRUE && $image -eq $TRUE ]]; then
+   warnings+=("-s did not sync python behaviours.  combine with -x to get rid of this warning")
+fi
+if [[ $setup -eq $TRUE && $agent -eq $TRUE ]]; then
+   myerror -s will exit after it is done.  do not combine it with -a
+   exit $LINENO
+fi
+if [[ $setup -eq $TRUE && $runswift -eq $TRUE ]]; then
+   myerror -s will exit after it is done.  do not combine it with -r
+   exit $LINENO
+fi
+if [[ $# -ne $OPTIND ]]; then
+   myerror ${!OPTIND} should be the last argument.  we don\'t support multiple robots or options after the robot.
+   exit $LINENO
+fi
+
+robot=${!OPTIND}
+
+if [ "$robot" = "" ]; then
+   usage
+fi
+
+# without -v, detect the os version
+if [[ ! -n "$osversion" ]]; then
+  osversion="$(getosversion $robot)"
+fi
+
+# if i don't know the version, i probably don't know the robot
+if [[ ! -n "$osversion" ]]; then
+   myerror unknown robot "$robot".  Use -v to specify an OS version
+   exit $LINENO
+fi
+
+if [[ ! -n "$build" ]]; then
+   if [[ "$osversion" = "2.1" ]]; then
+     build="$RUNSWIFT_CHECKOUT_DIR/build-relwithdebinfo-$CTC_VERSION_2_1"
+   elif [[ "$osversion" = "2.8" ]]; then
+     build="$RUNSWIFT_CHECKOUT_DIR/build-relwithdebinfo-$CTC_VERSION_2_8"
+   else
+     myerror "Build directory not specified with -b.  consider using nao_sync-2.1.sh $@"
+     exit $LINENO
+   fi
+fi
+
+if [[ ! -d "$build" ]]; then
+   myerror "Build directory $build does not exist"
+   exit $LINENO
+fi
+
+# check that we have everything setup to sync
+setup-sync.sh
+
+if [[ ! -n "$hostname" ]]; then
+  # if it's a known robot, add .local for the hostname (not really needed
+  # because we edit ~/.ssh/config and only use ssh in this script)
+  if [[ -v "robots[$robot]" ]]; then
+     hostname=$robot.local
+  else
+     hostname=$robot
+  fi
+fi
+
+if [ $delete -eq $TRUE ]; then
+   del='--delete-excluded'
+else
+   del=
+fi
+
+# Sync with the robot
+if [ $setup -eq $TRUE ]; then
+   if [ -e ~/.ssh/id_rsa.pub ]; then
+      myecho "Adding your ~/.ssh/id_rsa.pub to /home/nao/.ssh/authorized_keys"
+      myecho "If prompted echo nao's password"
+      cat ~/.ssh/id_rsa.pub | $SSH nao@$hostname "mkdir -p .ssh; sh -c 'cat >> .ssh/authorized_keys'; chmod 700 .ssh; chmod 600 .ssh/authorized_keys "
+      no_idpub=
+   else
+      myecho "~/.ssh/id_rsa.pub does not exist. You will need to enter nao's password each time"
+      no_idpub="nao's password and then "
+   fi
+
+   myecho "Granting sudo access: Enter ${no_idpub}root password (probably 'root')"
+   $SSH -t nao@$hostname "su -c 'tee /etc/sudoers <<< \"nao     ALL=(ALL) NOPASSWD:ALL\" && chmod 0440 /etc/sudoers'"
+
+   myecho "Modifying sshd_config and restarting sshd"
+   if [[ "$osversion" = "2.1" ]]; then
+      SSH_DIR=/etc/ssh.conf
+   else
+      SSH_DIR=/etc/ssh
+   fi
+   $SSH nao@$hostname "sudo sed -i '/UseDNS/s/.*/UseDNS no/'  $SSH_DIR/sshd_config &&
+     sudo sed -i /PermitRootLogin/s/no/yes/ $SSH_DIR/sshd_config &&
+     sudo sed -i '/ChallengeResponseAuthentication/s/.*/ChallengeResponseAuthentication no/' $SSH_DIR/sshd_config &&
+     sudo sed -i '/PasswordAuthentication/s/.*/PasswordAuthentication no/' $SSH_DIR/sshd_config &&
+     sudo sed -i '/PermitEmptyPasswords/s/.*/PermitEmptyPasswords no/' $SSH_DIR/sshd_config &&
+     sudo sed -i '/UsePAM/s/.*/UsePAM no/' $SSH_DIR/sshd_config"
+
+   if [[ "$osversion" = "2.1" ]]; then
+      $SSH nao@$hostname "sudo /etc/init.d/sshd stop && sudo /etc/init.d/sshd start"
+      myecho "Uploading root authorized keys"
+      $SSH nao@$hostname "umask 077 && sudo mkdir -p /root/.ssh && sudo tee /root/.ssh/authorized_keys > /dev/null" < $RUNSWIFT_CHECKOUT_DIR/image/home/nao/.ssh/authorized_keys
+
+      myecho "Syncing root directory"
+      RSYNC_CONCISE --no-owner --no-group --exclude=home $RUNSWIFT_CHECKOUT_DIR/image/ root@$hostname:/
+
+      set_hostname
+
+      myecho "Setting up networking"
+      $SSH nao@$hostname "sudo ln -sf /etc/init.d/net.lo /etc/init.d/net.eth0"
+      $SSH nao@$hostname "sudo rc-update add net.eth0 default"
+      $SSH nao@$hostname "sudo rc-update add runswiftwireless default"
+      # replace the 2.8 script for less confusion
+      $SSH nao@$hostname "sudo ln -sf runswiftwireless /etc/init.d/runswiftwireless.sh"
+
+      myecho "Turning off services we do not use"
+      # Add back in then delete because delete throws error if not installed
+      #  * Networking connection manager replaced with runswiftwireless above
+      $SSH nao@$hostname "sudo rc-update add connman boot"
+      $SSH nao@$hostname "sudo rc-update del connman boot"
+      $SSH nao@$hostname "sudo rc-update add qimessaging-json default"
+      $SSH nao@$hostname "sudo rc-update del qimessaging-json default"
+
+      myecho "Replacing default camera driver"
+      wget https://github.com/UNSWComputing/rUNSWift-assets/raw/master/mt9m114-Camera-Driver/mt9m114.ko
+      RSYNC_CONCISE mt9m114.ko root@$hostname:/lib/modules/2.6.33.9-rt31-aldebaran-rt/kernel/drivers/media/video
+      warnings+=("You may want to reboot if you copied a kernel module")
+
+   else
+      set_hostname
+
+      # setup our systemd services
+      RSYNC_CONCISE --chmod go= $del --exclude=*.pyc $RUNSWIFT_CHECKOUT_DIR/image/home/nao/.config/ nao@$hostname:/home/nao/.config/
+
+      # start daemon.py now and on boot
+      myecho "Attempting to enable daemon, this might fail with"
+      myecho "- 'Failed to connect to bus: No such file or directory'"
+      myecho "If so, comment the next THREE systemctl lines,"
+      myecho "AND comment out the nao restart' line"
+      myecho "then SSH to the Nao and run those FOUR commands manually"
+      $SSH nao@$hostname "systemctl --user enable daemon"
+      $SSH nao@$hostname "systemctl --user restart daemon"
+
+      # we don't trust connman so we do wireless ourselves
+      RSYNC_CONCISE --rsync-path="sudo rsync" $RUNSWIFT_CHECKOUT_DIR/image/etc/init.d/runswiftwireless.sh nao@$hostname:/etc/init.d/runswiftwireless.sh
+      $SSH nao@$hostname "systemctl --user enable wireless"
+      # replace the 2.1 script for less confusion
+      $SSH nao@$hostname "sudo ln -sf runswiftwireless.sh /etc/init.d/runswiftwireless"
+
+      # fix the issue where the robot sometimes comes on the network as nao.local instead of $robot.local
+      $SSH nao@$hostname "sudo sed -i 's/^Before=.*/Before=network.target avahi-daemon.service/' /etc/systemd/system/hostname.service"
+
+      # setup lola and restart naoqi
+      RSYNC_CONCISE --chmod go= $RUNSWIFT_CHECKOUT_DIR/image/home/nao/robocup.conf nao@$hostname:/home/nao/robocup.conf
+      $SSH nao@$hostname "nao restart"
+
+      # copy ubuntu 18.04
+      #SUDO_RSYNC_CONCISE $RUNSWIFT_CHECKOUT_DIR/image/data/2.8/ nao@$hostname:/data/2.8/
+   fi
+
+   # need to overwrite runswiftwireless (probably need static IP)
+   setup-venue.sh $hostname
+
+   # do not add stuff to /home/nao here as it gets wiped with nao_sync -d
+
+   myecho "Setup finished!"
+   print_warnings
+   exit 0
+fi
+
+   # These were from testing.
+
+   # echo "Setting default volume to low"
+   # $SSH root@$hostname "amixer sset 'PCM',0 20%"
+   # $SSH root@$hostname "alsactl store"
+
+   # echo "Running runswift executable on the robot"
+   # $SSH root@$hostname "/home/nao/bin/runswift > /dev/null 2> /dev/null &" &
+
+   # sleep 2
+
+   # echo "Restarting the robot (ignore any \"crash detected\" and \"exception caught\")"
+   # $SSH root@$hostname "reboot"
+   # echo
+
+
+# Set clock of the nao to the sync-er's PC, accurate to the second.
+NOW=$(date -u "+%Y-%m-%d %H:%M:%S")
+$SSH nao@$hostname "sudo date -u \"+%Y-%m-%d %H:%M:%S\" --set=\"${NOW}\"" > /dev/null
+
+
+if [ $image -eq $TRUE ]; then
+   myecho "Syncing image"
+   sync_image # must be first as it resets /home/nao with `nao_sync -d`
+   sync_gmm
+   sync_dnn
+fi
+
+if [ $agent -eq $TRUE ]; then
+   myecho "Syncing libagent"
+   sync_libagent
+fi
+
+if [ $runswift -eq $TRUE ]; then
+   myecho "Syncing runswift"
+   sync_runswift
+fi
+
+echo
+myecho "Finished!"
+echo
+
+print_warnings
+
+exit 0

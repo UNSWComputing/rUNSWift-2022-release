@@ -1,0 +1,12 @@
+[Unit]
+Description=Daemon to start runswift wireless
+After=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/usr/bin/sudo /etc/init.d/runswiftwireless.sh start
+ExecStop=/usr/bin/sudo /etc/init.d/runswiftwireless.sh stop
+
+[Install]
+WantedBy=default.target

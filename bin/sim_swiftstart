@@ -1,0 +1,62 @@
+#!/bin/bash
+
+# Script to run a 3D simulator instance without having to open 4 terminal windows
+
+REALPATH=$(realpath "$0")
+BIN_DIR=$(dirname "$REALPATH")
+source "$BIN_DIR/source.sh"
+
+# Auto quit everything on ctrl+c
+trap ctrl_c INT
+
+function ctrl_c() {
+    echo "** Quitting!"
+    sim_stop
+
+}
+
+
+# Takes in arguments to pass onto sim_run
+if [[ $# -ne 0 ]]; then
+  if [ "$1" = "-h" ] || [ "$1" = "--help" ]
+  then
+    echo "usage: sim_swiftstart [-arg1 value1] ..."
+    echo "All args will be passed to sim_run. Use 'sim_run -h' to see sim_run help."
+    exit 1
+  fi
+fi
+
+# Start rcssserver3d, after killing any current instances
+echo "Starting rcssserver3d..."
+pgrep rcssserver3d > /dev/null && pkill -9 rcssserver3d
+rcssserver3d > /dev/null 2>&1 &
+if pgrep rcssserver3d > /dev/null; then
+  echo "Started rcssserver3d."
+else
+  echo "Failed to start rcssserver3d, creating a proxy"
+  # runswift only connects to localhost:3100 so setup localhost 3100 to jayen's running server on runswift2:3110
+  # TODO: do the same for roboviz by proxying localhost:3200 to runswift2:3210
+  [[ -p /tmp/rcssserver3d.fifo ]] || mkfifo /tmp/rcssserver3d.fifo
+  pgrep -u $USER nc > /dev/null && pkill -u $USER nc && sleep 0.5 && pkill -u $USER sleep
+  while sleep 1; do nc -lk -p 3100 < /tmp/rcssserver3d.fifo | nc runswift2.cse.unsw.edu.au 3110 > /tmp/rcssserver3d.fifo; done &
+fi
+
+# Repeat with Roboviz, but no restarting
+if pgrep "roboviz" > /dev/null
+then
+    echo "Roboviz is already running!"
+else
+    echo "Starting Roboviz..."
+    roboviz.sh > /dev/null 2>&1 &
+    echo "Started Roboviz."
+fi
+
+
+# Sleep to give server and roboviz a chance to start up
+# usefull if simswift is being run with --gamecontroller.state=PLAYING
+sleep 4s
+
+# Start simwift instances, after killing any curent instances
+echo "Starting simswift instance."
+sim_kill
+simswift "$@"

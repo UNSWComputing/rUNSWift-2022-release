@@ -1,0 +1,6 @@
+#ifndef OPTION_CONSTANTS_HPP
+#define OPTION_CONSTANTS_HPP
+
+#define CALIBRATION_KICK "calibration.kick"
+
+#endif //OPTION_CONSTANTS_HPP

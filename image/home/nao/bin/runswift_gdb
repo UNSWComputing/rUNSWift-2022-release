@@ -1,0 +1,4 @@
+#!/bin/bash
+set -e
+set -u
+gdb -x /home/nao/data/gdb_cmds.txt --return-child-result --quiet --args `which runswift` "$@"

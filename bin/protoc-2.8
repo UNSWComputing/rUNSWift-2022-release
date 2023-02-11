@@ -1,0 +1,5 @@
+#!/bin/bash
+set -e
+set -u
+
+LD_LIBRARY_PATH=$RUNSWIFT_CHECKOUT_DIR/softwares/ctc-linux64-atom-2.8.1.33/yocto-sdk/sysroots/core2-32-sbr-linux/usr/lib/ $RUNSWIFT_CHECKOUT_DIR/softwares/ctc-linux64-atom-2.8.1.33/yocto-sdk/sysroots/core2-32-sbr-linux/usr/bin/protoc "$@"

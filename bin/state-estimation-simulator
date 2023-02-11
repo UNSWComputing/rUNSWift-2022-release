@@ -1,0 +1,3 @@
+#!/bin/bash
+
+${RUNSWIFT_CHECKOUT_DIR}/build-relwithdebinfo/utils/state-estimation-simulator/state-estimation-simulator.bin "$@"

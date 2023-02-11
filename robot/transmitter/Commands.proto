@@ -1,0 +1,10 @@
+// see Blackboard.proto for instructions
+
+syntax = "proto2";
+
+package offnao;
+
+message Commands {
+  optional uint64 sendingMask = 1;
+  repeated string argv = 2;
+}

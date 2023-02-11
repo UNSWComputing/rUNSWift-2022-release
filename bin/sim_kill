@@ -1,0 +1,4 @@
+#!/bin/sh
+# DO NOT add -f here, because it can kill a hell of a lot more than just runswift
+pkill -9 runswift
+true # so sim_kill always returns success

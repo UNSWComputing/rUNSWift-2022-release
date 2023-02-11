@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# Script to run a 3D simulator instance without having to open 4 terminal windows
+
+# Takes in arguments to pass onto sim_run
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]
+then
+    echo "usage: sim_start [-arg1 value1] ..."
+    echo "All args will be passed to sim_run. Use 'sim_run -h' to see sim_run help."
+    exit 1
+fi
+
+# Start rcssserver3d, after killing any current instances
+echo "Starting rcssserver3d..."
+pkill -9 rcssserver3d
+rcssserver3d > /dev/null 2>&1 &
+echo "Started rcssserver3d."
+
+# Repeat with Roboviz, but no restarting
+if pgrep "roboviz" > /dev/null
+then
+    echo "Roboviz is already running!"
+else
+    echo "Starting Roboviz..."
+    roboviz.sh > /dev/null 2>&1 &
+    echo "Started Roboviz."
+fi
+
+# Allow roboviz to fully start up
+sleep 5
+
+# Start simwift instances, after killing any curent instances
+echo "Starting simswift instances."
+sim_kill
+sim_run "$@"
+echo "Started simswift instances."
+
+# Start gamecontroller
+if pgrep "gamecontroller" > /dev/null
+then
+    echo "gamecontroller is already running!"
+else
+    echo "Starting gamecontroller..."
+    gamecontroller --game-type preliminary > /dev/null 2>&1 &
+    echo "Started gamecontroller."
+fi
+
