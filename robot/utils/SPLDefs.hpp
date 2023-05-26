@@ -57,9 +57,6 @@
 #elif !defined(USING_SMALL_FIELD)
    #define ROBOTS_PER_TEAM 6
 
-   // When updating these constants make sure you update the constants in simserver/app.py as well
-   // https://github.com/UNSWComputing/rUNSWift/blob/master/utils/simserver/app.py
-
    /** Field line dimensions */
    #define FIELD_LENGTH 9010
    #define FIELD_WIDTH 6020
